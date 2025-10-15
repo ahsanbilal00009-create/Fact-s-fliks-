@@ -1,0 +1,165 @@
+{
+  "name": "YouTube Automation AI Agent",
+  "modules": [
+    {
+      "id": 1,
+      "name": "Scheduler",
+      "type": "tools.schedule",
+      "params": {
+        "interval": "daily",
+        "time": "10:00"
+      }
+    },
+    {
+      "id": 2,
+      "name": "Detect Trending Topic (AI)",
+      "type": "http.makeRequest",
+      "connectionId": "openai_connection_1",
+      "params": {
+        "method": "POST",
+        "url": "https://api.openai.com/v1/chat/completions",
+        "headers": {
+          "Authorization": "Bearer YOUR_OPENAI_API_KEY",
+          "Content-Type": "application/json"
+        },
+        "body": {
+          "model": "gpt-4",
+          "messages": [
+            {
+              "role": "system",
+              "content": "You are an autonomous YouTube automation agent. Each day, analyze trending global topics and decide the most viral or high-performing niche to target on YouTube."
+            },
+            {
+              "role": "user",
+              "content": "Generate a trending content topic for today within niches like movie reviews, world history, T20/ODI cricket, or AI technology. Return only JSON:\n{\n  \"topic\": \"short title of topic\",\n  \"search_query\": \"search term for YouTube API\",\n  \"rationale\": \"why this topic is trending today\"\n}"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": 3,
+      "name": "Search YouTube",
+      "type": "http.makeRequest",
+      "connectionId": "youtube_connection_1",
+      "params": {
+        "method": "GET",
+        "url": "https://www.googleapis.com/youtube/v3/search",
+        "query": {
+          "q": "{{2.body.choices[0].message.content.search_query}}",
+          "order": "date",
+          "maxResults": "5",
+          "type": "video",
+          "key": "YOUR_YOUTUBE_API_KEY",
+          "part": "snippet"
+        }
+      }
+    },
+    {
+      "id": 4,
+      "name": "Filter Copyright",
+      "type": "tools.filter",
+      "params": {
+        "condition": "snippet.license == 'creativeCommon' || snippet.rights == 'none'"
+      }
+    },
+    {
+      "id": 5,
+      "name": "Download Video",
+      "type": "http.makeRequest",
+      "connectionId": "server_connection_1",
+      "params": {
+        "method": "POST",
+        "url": "https://your-server.com/download",
+        "headers": {
+          "Content-Type": "application/json"
+        },
+        "body": {
+          "videoId": "{{3.body.items[0].id.videoId}}"
+        }
+      }
+    },
+    {
+      "id": 6,
+      "name": "Edit Video",
+      "type": "http.makeRequest",
+      "connectionId": "server_connection_1",
+      "params": {
+        "method": "POST",
+        "url": "https://your-server.com/edit",
+        "headers": {
+          "Content-Type": "application/json"
+        },
+        "body": {
+          "fileUrl": "{{5.body.fileUrl}}",
+          "watermark": "YourChannelName",
+          "intro": "intro.mp4",
+          "outro": "outro.mp4",
+          "style": "ai_animated"
+        }
+      }
+    },
+    {
+      "id": 7,
+      "name": "Generate SEO + Metadata (AI)",
+      "type": "http.makeRequest",
+      "connectionId": "openai_connection_1",
+      "params": {
+        "method": "POST",
+        "url": "https://api.openai.com/v1/chat/completions",
+        "headers": {
+          "Authorization": "Bearer YOUR_OPENAI_API_KEY",
+          "Content-Type": "application/json"
+        },
+        "body": {
+          "model": "gpt-4",
+          "messages": [
+            {
+              "role": "system",
+              "content": "You are a YouTube SEO expert helping an AI video automation agent create metadata for uploads."
+            },
+            {
+              "role": "user",
+              "content": "Generate an SEO optimized title, 200-word description with timestamps and hashtags, and 10 tags for this video.\nVideo Topic: {{2.body.choices[0].message.content.topic}}\nOriginal Video Title: {{3.body.items[0].snippet.title}}\nReturn only JSON: {\"title\":\"...\",\"description\":\"...\",\"tags\":[\"...\"]}"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": 8,
+      "name": "Save to Google Drive",
+      "type": "googleDrive.uploadFile",
+      "connectionId": "googledrive_connection_1",
+      "params": {
+        "folder": "/YouTubeAutoUploader/",
+        "file": "{{6.body.editedFileUrl}}"
+      }
+    },
+    {
+      "id": 9,
+      "name": "Upload to YouTube",
+      "type": "http.makeRequest",
+      "connectionId": "youtube_connection_1",
+      "params": {
+        "method": "POST",
+        "url": "https://www.googleapis.com/upload/youtube/v3/videos?part=snippet,status",
+        "headers": {
+          "Authorization": "Bearer YOUR_YOUTUBE_OAUTH_TOKEN",
+          "Content-Type": "application/json"
+        },
+        "body": {
+          "snippet": {
+            "title": "{{7.body.choices[0].message.content.title}}",
+            "description": "{{7.body.choices[0].message.content.description}}",
+            "tags": "{{7.body.choices[0].message.content.tags}}"
+          },
+          "status": {
+            "privacyStatus": "public"
+          },
+          "video": "{{6.body.editedFileUrl}}"
+        }
+      }
+    }
+  ]
+}
